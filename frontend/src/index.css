@@ -1,0 +1,29 @@
+@import url("https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&family=Sora:wght@500;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-soft: #f8fafc;
+  --ink-main: #0f172a;
+  --brand: #0f766e;
+  --brand-deep: #115e59;
+  --accent: #f59e0b;
+}
+
+body {
+  font-family: "Nunito Sans", sans-serif;
+  color: var(--ink-main);
+  background:
+    radial-gradient(circle at 15% -5%, rgba(245, 158, 11, 0.18), transparent 35%),
+    radial-gradient(circle at 85% 15%, rgba(15, 118, 110, 0.2), transparent 40%),
+    var(--bg-soft);
+  min-height: 100vh;
+}
+
+input,
+select,
+textarea {
+  @apply border-slate-300;
+}
