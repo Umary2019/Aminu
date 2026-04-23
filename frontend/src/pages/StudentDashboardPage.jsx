@@ -11,6 +11,7 @@ const StudentDashboardPage = () => {
   const [recommendations, setRecommendations] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [activities, setActivities] = useState([]);
+  const [paperQuery, setPaperQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -18,7 +19,7 @@ const StudentDashboardPage = () => {
     const loadLatest = async () => {
       try {
         const [papersRes, favoritesRes, recRes, noteRes, activityRes] = await Promise.all([
-          api.get("/papers", { params: { limit: 6 } }),
+          api.get("/papers", { params: { limit: 20 } }),
           api.get("/student/favorites"),
           api.get("/student/recommendations"),
           api.get("/student/notifications"),
@@ -73,6 +74,17 @@ const StudentDashboardPage = () => {
       topCourseCodes,
     };
   }, [papers]);
+
+  const filteredPapers = useMemo(() => {
+    const query = paperQuery.trim().toLowerCase();
+    if (!query) return papers;
+
+    return papers.filter((paper) =>
+      [paper.title, paper.courseCode, paper.department, paper.faculty]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query))
+    );
+  }, [paperQuery, papers]);
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-10 md:px-6">
@@ -215,7 +227,7 @@ const StudentDashboardPage = () => {
 
           {!loading && !error && (
             <div className="mt-4 grid gap-4 md:grid-cols-2">
-              {papers.length === 0 ? (
+              {filteredPapers.length === 0 ? (
                 <article className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
                   <h3 className="font-display text-lg font-bold text-slate-900">No Papers Yet</h3>
                   <p className="mt-2 text-sm text-slate-600">
@@ -223,13 +235,26 @@ const StudentDashboardPage = () => {
                   </p>
                 </article>
               ) : (
-                papers.map((paper) => <PaperCard key={paper._id} paper={paper} />)
+                filteredPapers.map((paper) => <PaperCard key={paper._id} paper={paper} />)
               )}
             </div>
           )}
         </div>
 
         <aside className="space-y-4">
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 className="font-display text-lg font-bold text-slate-900">Quick Find</h3>
+            <p className="mt-1 text-sm text-slate-600">Filter loaded papers by course code, title, faculty, or department.</p>
+            <input
+              type="text"
+              value={paperQuery}
+              onChange={(event) => setPaperQuery(event.target.value)}
+              placeholder="Type COSC401"
+              className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+            <p className="mt-2 text-xs font-semibold text-teal-700">{filteredPapers.length} paper(s) matched</p>
+          </section>
+
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h3 className="font-display text-lg font-bold text-slate-900">Trending Course Codes</h3>
             <p className="mt-1 text-sm text-slate-600">Most frequent codes in your current feed.</p>
