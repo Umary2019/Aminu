@@ -12,6 +12,6 @@ const {
 const router = express.Router();
 
 router.post("/", protect, createCommentValidation, validateRequest, createComment);
-router.get("/paper/:paperId", paperCommentsValidation, validateRequest, getPaperComments);
+router.get("/paper/:paperId", protect, paperCommentsValidation, validateRequest, getPaperComments);
 
 module.exports = router;

@@ -1,4 +1,6 @@
 const { body, param, query } = require("express-validator");
+const fs = require("fs/promises");
+const path = require("path");
 const cloudinary = require("../config/cloudinary");
 
 const User = require("../models/User");
@@ -320,7 +322,13 @@ const permanentlyDeletePaper = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: "Paper not found" });
   }
 
-  if (cloudinary.isConfigured && paper.filePublicId) {
+  const isLocalFile = typeof paper.filePublicId === "string" && paper.filePublicId.startsWith("local/papers/");
+
+  if (isLocalFile) {
+    const filename = paper.filePublicId.replace("local/papers/", "");
+    const localFilePath = path.join(__dirname, "..", "uploads", "papers", filename);
+    await fs.unlink(localFilePath).catch(() => null);
+  } else if (cloudinary.isConfigured && paper.filePublicId) {
     await cloudinary.uploader.destroy(paper.filePublicId, { resource_type: "raw" });
   }
   await paper.deleteOne();

@@ -1,5 +1,8 @@
 const { body, query, param } = require("express-validator");
 const streamifier = require("streamifier");
+const fs = require("fs/promises");
+const path = require("path");
+const crypto = require("crypto");
 
 const cloudinary = require("../config/cloudinary");
 const Paper = require("../models/Paper");
@@ -34,6 +37,35 @@ const searchPapersValidation = [
 
 const paperByIdValidation = [param("id").isMongoId().withMessage("Valid paper id is required")];
 
+const transientCloudinaryErrors = new Set(["TimeoutError", "ENOTFOUND", "EAI_AGAIN", "ETIMEDOUT"]);
+
+const sanitizeFilename = (originalname) => {
+  const base = path.basename(originalname || "paper", path.extname(originalname || ""));
+  const cleaned = base
+    .replace(/[^a-zA-Z0-9-_]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 80);
+
+  return cleaned || "paper";
+};
+
+const saveFileLocally = async (req, buffer, originalname) => {
+  const uploadsDir = path.join(__dirname, "..", "uploads", "papers");
+  const filename = `${Date.now()}-${crypto.randomUUID()}-${sanitizeFilename(originalname)}.pdf`;
+  const filePath = path.join(uploadsDir, filename);
+
+  await fs.mkdir(uploadsDir, { recursive: true });
+  await fs.writeFile(filePath, buffer);
+
+  const fileUrl = `${req.protocol}://${req.get("host")}/uploads/papers/${filename}`;
+  return {
+    secure_url: fileUrl,
+    public_id: `local/papers/${filename}`,
+    storage: "local",
+  };
+};
+
 const uploadToCloudinary = (buffer, originalname) => {
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
@@ -43,15 +75,20 @@ const uploadToCloudinary = (buffer, originalname) => {
         use_filename: true,
         unique_filename: true,
         filename_override: originalname.replace(/\.pdf$/i, ""),
+        timeout: Number(process.env.CLOUDINARY_TIMEOUT || 120000),
       },
       (error, result) => {
         if (error) {
-          reject(error);
+          reject(new Error(error.message || "Cloudinary upload failed"));
         } else {
           resolve(result);
         }
       }
     );
+
+    uploadStream.on("error", (error) => {
+      reject(new Error(error.message || "Cloudinary upload stream failed"));
+    });
 
     streamifier.createReadStream(buffer).pipe(uploadStream);
   });
@@ -62,15 +99,29 @@ const uploadPaper = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: "PDF file is required" });
   }
 
-  if (!cloudinary.isConfigured) {
-    return res.status(500).json({
-      message:
-        "Cloudinary is not configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET in backend/.env.",
-    });
-  }
-
   const { title, courseCode, faculty, department, level, year, semester } = req.body;
-  const uploadResult = await uploadToCloudinary(req.file.buffer, req.file.originalname);
+  let uploadResult;
+
+  if (cloudinary.isConfigured) {
+    try {
+      uploadResult = await uploadToCloudinary(req.file.buffer, req.file.originalname);
+    } catch (error) {
+      const isTransient =
+        transientCloudinaryErrors.has(error?.name) ||
+        transientCloudinaryErrors.has(error?.code) ||
+        /request timeout|eai_again|enotfound|etimedout/i.test(error?.message || "");
+
+      if (!isTransient) {
+        return res.status(502).json({
+          message: error.message || "Could not upload PDF to Cloudinary",
+        });
+      }
+
+      uploadResult = await saveFileLocally(req, req.file.buffer, req.file.originalname);
+    }
+  } else {
+    uploadResult = await saveFileLocally(req, req.file.buffer, req.file.originalname);
+  }
 
   const paper = await Paper.create({
     title,
@@ -103,7 +154,14 @@ const uploadPaper = asyncHandler(async (req, res) => {
     );
   }
 
-  return res.status(201).json({ message: "Paper uploaded successfully", paper });
+  const wasLocalFallback = uploadResult.storage === "local";
+  return res.status(201).json({
+    message: wasLocalFallback
+      ? "Paper uploaded successfully (saved locally because Cloudinary is currently unavailable)"
+      : "Paper uploaded successfully",
+    paper,
+    storage: wasLocalFallback ? "local" : "cloudinary",
+  });
 });
 
 const searchPapers = asyncHandler(async (req, res) => {
@@ -122,12 +180,19 @@ const searchPapers = asyncHandler(async (req, res) => {
     limit = 12,
   } = req.query;
 
+  const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const safeTrim = (value) => (typeof value === "string" ? value.trim() : "");
+  const facultyValue = safeTrim(faculty);
+  const departmentValue = safeTrim(department);
+  const levelValue = safeTrim(level);
+  const courseCodeValue = safeTrim(courseCode);
+
   const filters = { status: "approved", isDeleted: false };
-  if (faculty) filters.faculty = faculty;
-  if (department) filters.department = department;
-  if (level) filters.level = level;
+  if (facultyValue) filters.faculty = { $regex: `^${escapeRegex(facultyValue)}$`, $options: "i" };
+  if (departmentValue) filters.department = { $regex: `^${escapeRegex(departmentValue)}$`, $options: "i" };
+  if (levelValue) filters.level = { $regex: `^${escapeRegex(levelValue)}$`, $options: "i" };
   if (semester) filters.semester = semester;
-  if (courseCode) filters.courseCode = { $regex: courseCode, $options: "i" };
+  if (courseCodeValue) filters.courseCode = { $regex: courseCodeValue, $options: "i" };
   if (year) filters.year = Number(year);
   if (minYear || maxYear) {
     filters.year = {

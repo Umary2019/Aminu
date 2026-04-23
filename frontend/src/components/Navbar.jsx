@@ -8,6 +8,16 @@ const Navbar = () => {
   const { user, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
 
+  const handleSearchClick = () => {
+    if (user) {
+      navigate("/search");
+      return;
+    }
+
+    window.alert("You must register first to search papers.");
+    navigate("/register");
+  };
+
   const handleLogout = () => {
     logout();
     navigate("/");
@@ -21,9 +31,19 @@ const Navbar = () => {
         </Link>
 
         <nav className="flex items-center gap-4">
-          <NavLink to="/search" className={navClass}>
-            Search
-          </NavLink>
+          {user ? (
+            <NavLink to="/search" className={navClass}>
+              Search
+            </NavLink>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSearchClick}
+              className="text-sm font-semibold text-slate-700 transition hover:text-teal-700"
+            >
+              Search
+            </button>
+          )}
           {user && (
             <NavLink to={isAdmin ? "/admin" : "/dashboard"} className={navClass}>
               Dashboard

@@ -3,6 +3,16 @@ const FilterPanel = ({ filters, onChange, onSubmit, onReset, faculties, departme
 
   return (
     <form onSubmit={onSubmit} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-3">
+        <input
+          type="text"
+          name="q"
+          value={filters.q || ""}
+          onChange={onChange}
+          placeholder="Quick search by title or course code, like COSC401"
+          className="w-full rounded-lg border px-3 py-2"
+        />
+      </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <select
           name="faculty"

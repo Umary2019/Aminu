@@ -17,11 +17,11 @@ const {
 
 const router = express.Router();
 
-router.get("/", searchPapersValidation, validateRequest, searchPapers);
+router.get("/", protect, searchPapersValidation, validateRequest, searchPapers);
 router.post("/:id/view", protect, paperByIdValidation, validateRequest, trackView);
 router.post("/:id/download", protect, paperByIdValidation, validateRequest, trackDownload);
-router.get("/:id/preview", paperByIdValidation, validateRequest, previewPaper);
-router.get("/:id", paperByIdValidation, validateRequest, getPaperById);
+router.get("/:id/preview", protect, paperByIdValidation, validateRequest, previewPaper);
+router.get("/:id", protect, paperByIdValidation, validateRequest, getPaperById);
 router.post(
   "/upload",
   protect,

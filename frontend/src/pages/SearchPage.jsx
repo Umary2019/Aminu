@@ -4,10 +4,9 @@ import PaperCard from "../components/PaperCard";
 import FilterPanel from "../components/FilterPanel";
 import {
   facultyNames,
-  getAllCourseDirectory,
   getCoursesByDepartment,
   getDepartmentsByFaculty,
-  gsuCatalog,
+  gsuCatalog
 } from "../data/gsuCatalog";
 
 const initialFilters = {
@@ -15,11 +14,7 @@ const initialFilters = {
   faculty: "",
   department: "",
   level: "",
-  semester: "",
   courseCode: "",
-  minYear: "",
-  maxYear: "",
-  sort: "newest",
 };
 
 const SearchPage = () => {
@@ -30,15 +25,19 @@ const SearchPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const courseDirectory = getAllCourseDirectory();
-
   const fetchPapers = async (searchFilters = filters) => {
     setLoading(true);
     setError("");
 
     try {
+      const normalizedFilters = Object.fromEntries(
+        Object.entries(searchFilters).map(([key, value]) => [
+          key,
+          typeof value === "string" ? value.trim() : value,
+        ])
+      );
       const params = Object.fromEntries(
-        Object.entries(searchFilters).filter(([, value]) => value !== "")
+        Object.entries(normalizedFilters).filter(([, value]) => value !== "")
       );
       const { data } = await api.get("/papers", { params });
       setPapers(data.papers || []);
@@ -76,6 +75,11 @@ const SearchPage = () => {
       return;
     }
 
+    if (name === "level") {
+      setFilters((prev) => ({ ...prev, level: value, courseCode: "" }));
+      return;
+    }
+
     setFilters((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -101,8 +105,7 @@ const SearchPage = () => {
     <main className="mx-auto max-w-6xl px-4 py-10 md:px-6">
       <h1 className="font-display text-3xl font-bold text-slate-900">Smart Search</h1>
       <p className="mt-2 text-slate-600">
-        Search Gombe State University past papers using structured filters. Course code is linked by department and also
-        available as a manual input.
+        Search in order: faculty, department, level, and course code.
       </p>
 
       <div className="mt-6">
@@ -114,19 +117,18 @@ const SearchPage = () => {
           faculties={facultyNames}
           departments={departments}
           levels={gsuCatalog.levels}
-          semesters={gsuCatalog.semesters}
           courses={courses}
         />
       </div>
 
-      {filters.department && (
+      {filters.department && filters.level && (
         <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="font-display text-lg font-bold text-slate-900">Department Course Codes</h2>
+          <h2 className="font-display text-lg font-bold text-slate-900">Course Codes for Selected Level</h2>
           <p className="mt-1 text-sm text-slate-600">
             Click a course code link to auto-fill search and fetch available papers.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            {courses.map((item) => (
+            {courses.filter((item) => item.level === filters.level).map((item) => (
               <button
                 key={`${item.department}-${item.code}`}
                 type="button"

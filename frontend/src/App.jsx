@@ -29,8 +29,22 @@ const App = () => {
           path="/register"
           element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <RegisterPage />}
         />
-        <Route path="/search" element={<SearchPage />} />
-        <Route path="/papers/:id" element={<PaperDetailsPage />} />
+        <Route
+          path="/search"
+          element={
+            <ProtectedRoute>
+              <SearchPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/papers/:id"
+          element={
+            <ProtectedRoute>
+              <PaperDetailsPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/dashboard"
           element={

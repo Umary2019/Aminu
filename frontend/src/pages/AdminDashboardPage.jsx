@@ -32,12 +32,17 @@ const AdminDashboardPage = () => {
   const [error, setError] = useState("");
   const [busyAction, setBusyAction] = useState("");
 
+  const cleanParams = (params) =>
+    Object.fromEntries(Object.entries(params).filter(([, value]) => value !== "" && value !== null && value !== undefined));
+
   const fetchDashboardData = async () => {
     try {
+      const paperParams = cleanParams(paperFilters);
+      const userParams = cleanParams(userFilters);
       const [analyticsRes, papersRes, usersRes] = await Promise.all([
         api.get("/admin/analytics"),
-        api.get("/admin/papers", { params: paperFilters }),
-        api.get("/admin/users", { params: userFilters }),
+        api.get("/admin/papers", { params: paperParams }),
+        api.get("/admin/users", { params: userParams }),
       ]);
       setAnalytics(analyticsRes.data);
       setPapers(papersRes.data.papers);
@@ -546,55 +551,48 @@ const AdminDashboardPage = () => {
                       <p>{paper.commentCount || 0} comments</p>
                       <p>{paper.averageRating || 0} / 5 ({paper.totalRatings || 0})</p>
                     </td>
-                    <td className="py-3 pr-3 capitalize">{paper.status}</td>
+                    <td className="py-3 pr-3 capitalize">
+                      <span
+                        className={
+                          paper.status === "approved"
+                            ? "rounded-full bg-emerald-100 px-2 py-1 font-semibold text-emerald-700"
+                            : paper.status === "rejected"
+                              ? "rounded-full bg-rose-100 px-2 py-1 font-semibold text-rose-700"
+                              : "rounded-full bg-amber-100 px-2 py-1 font-semibold text-amber-700"
+                        }
+                      >
+                        {paper.status}
+                      </span>
+                    </td>
                     <td className="py-3 pr-3">
-                      <div className="flex flex-wrap gap-2">
-                        <Link
-                          to={`/papers/${paper._id}`}
-                          className="rounded bg-slate-100 px-2 py-1 font-semibold text-slate-700"
+                      {paper.status === "pending" ? (
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => handleReview(paper._id, "approved")}
+                            disabled={busyAction.startsWith("review-") || busyAction === `delete-${paper._id}`}
+                            className="rounded bg-emerald-100 px-2 py-1 font-semibold text-emerald-700 disabled:opacity-60"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => handleReview(paper._id, "rejected")}
+                            disabled={busyAction.startsWith("review-") || busyAction === `delete-${paper._id}`}
+                            className="rounded bg-amber-100 px-2 py-1 font-semibold text-amber-700 disabled:opacity-60"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      ) : (
+                        <span
+                          className={
+                            paper.status === "approved"
+                              ? "font-semibold text-emerald-700"
+                              : "font-semibold text-rose-700"
+                          }
                         >
-                          View
-                        </Link>
-                        <button
-                          onClick={() => handleReview(paper._id, "approved")}
-                          disabled={busyAction.startsWith("review-") || busyAction === `delete-${paper._id}`}
-                          className="rounded bg-emerald-100 px-2 py-1 font-semibold text-emerald-700 disabled:opacity-60"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          onClick={() => handleReview(paper._id, "rejected")}
-                          disabled={busyAction.startsWith("review-") || busyAction === `delete-${paper._id}`}
-                          className="rounded bg-amber-100 px-2 py-1 font-semibold text-amber-700 disabled:opacity-60"
-                        >
-                          Reject
-                        </button>
-                        <button
-                          onClick={() => handleDelete(paper._id)}
-                          disabled={busyAction.startsWith("review-") || busyAction === `delete-${paper._id}`}
-                          className="rounded bg-rose-100 px-2 py-1 font-semibold text-rose-700 disabled:opacity-60"
-                        >
-                          Recycle
-                        </button>
-                        {paper.isDeleted && (
-                          <>
-                            <button
-                              onClick={() => handleRestorePaper(paper._id)}
-                              disabled={busyAction === `restore-${paper._id}`}
-                              className="rounded bg-blue-100 px-2 py-1 font-semibold text-blue-700 disabled:opacity-60"
-                            >
-                              Restore
-                            </button>
-                            <button
-                              onClick={() => handlePermanentDelete(paper._id)}
-                              disabled={busyAction === `permanent-${paper._id}`}
-                              className="rounded bg-rose-200 px-2 py-1 font-semibold text-rose-800 disabled:opacity-60"
-                            >
-                              Delete Forever
-                            </button>
-                          </>
-                        )}
-                      </div>
+                          {paper.status}
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}

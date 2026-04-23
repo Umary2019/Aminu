@@ -17,19 +17,23 @@ const PaperDetailsPage = () => {
   const [reportReason, setReportReason] = useState("wrong-paper");
   const [reportDetails, setReportDetails] = useState("");
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   const fetchDetails = async () => {
+    setLoadError("");
     try {
-      const [paperRes, commentsRes] = await Promise.all([
-        api.get(`/papers/${id}`),
-        api.get(`/comments/paper/${id}`),
-      ]);
-
+      const paperRes = await api.get(`/papers/${id}`);
       setPaper(paperRes.data.paper);
       setRatingSummary(paperRes.data.ratingSummary);
-      setComments(commentsRes.data.comments);
+
+      try {
+        const commentsRes = await api.get(`/comments/paper/${id}`);
+        setComments(commentsRes.data.comments || []);
+      } catch (_commentsError) {
+        setComments([]);
+      }
     } catch (apiError) {
-      setError(apiError.response?.data?.message || "Could not load paper details");
+      setLoadError(apiError.response?.data?.message || "Could not load paper details");
     }
   };
 
@@ -119,11 +123,11 @@ const PaperDetailsPage = () => {
     api.post(`/papers/${id}/download`).catch(() => {});
   };
 
-  if (error) {
-    return <main className="mx-auto max-w-4xl px-4 py-10 text-red-700">{error}</main>;
+  if (!paper && loadError) {
+    return <main className="mx-auto max-w-4xl px-4 py-10 text-red-700">{loadError}</main>;
   }
 
-  if (!paper) {
+  if (!paper && !loadError) {
     return <main className="mx-auto max-w-4xl px-4 py-10 text-slate-600">Loading paper...</main>;
   }
 
@@ -132,6 +136,7 @@ const PaperDetailsPage = () => {
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-10 md:px-6">
+      {error && <p className="mb-4 rounded-lg bg-amber-50 p-3 text-amber-800">{error}</p>}
       {isDemoPaper && (
         <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           <strong>Sample Paper:</strong> This is a starter sample paper. Replace with real uploads as admin.

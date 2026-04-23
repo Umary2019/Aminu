@@ -1,6 +1,20 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 const LandingPage = () => {
+  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+
+  const handleStartSearch = () => {
+    if (isAuthenticated) {
+      navigate("/search");
+      return;
+    }
+
+    window.alert("You must register first to search papers.");
+    navigate("/register");
+  };
+
   const highlights = [
     { label: "Centralized Library", text: "One verified place for past papers across faculties and departments." },
     { label: "Smart Academic Filters", text: "Find papers by faculty, department, level, semester, and course code." },
@@ -65,12 +79,13 @@ const LandingPage = () => {
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <Link
-                to="/search"
+              <button
+                type="button"
+                onClick={handleStartSearch}
                 className="rounded-xl bg-teal-700 px-5 py-3 text-sm font-bold uppercase tracking-wide text-white transition hover:bg-teal-800"
               >
                 Start Searching
-              </Link>
+              </button>
               <Link
                 to="/register"
                 className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold uppercase tracking-wide text-slate-800"
