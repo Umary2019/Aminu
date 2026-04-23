@@ -11,7 +11,7 @@ const activitySchema = new mongoose.Schema(
     paperId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Paper",
-      required: true,
+      required: false,
       index: true,
     },
     action: {

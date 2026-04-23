@@ -4,6 +4,9 @@ const streamifier = require("streamifier");
 const cloudinary = require("../config/cloudinary");
 const Paper = require("../models/Paper");
 const Rating = require("../models/Rating");
+const Activity = require("../models/Activity");
+const Notification = require("../models/Notification");
+const User = require("../models/User");
 const asyncHandler = require("../utils/asyncHandler");
 
 const uploadPaperValidation = [
@@ -24,6 +27,9 @@ const searchPapersValidation = [
   query("courseCode").optional().isString(),
   query("q").optional().isString(),
   query("year").optional().isInt({ min: 2000 }),
+  query("minYear").optional().isInt({ min: 2000 }),
+  query("maxYear").optional().isInt({ min: 2000 }),
+  query("sort").optional().isIn(["newest", "oldest", "highest-rated", "most-downloaded", "relevance"]),
 ];
 
 const paperByIdValidation = [param("id").isMongoId().withMessage("Valid paper id is required")];
@@ -80,19 +86,55 @@ const uploadPaper = asyncHandler(async (req, res) => {
     status: req.user.role === "admin" ? "approved" : "pending",
   });
 
+  const subscribedUsers = await User.find({
+    role: "student",
+    "preferences.departments": { $in: [department] },
+  }).select("_id");
+
+  if (subscribedUsers.length > 0) {
+    await Notification.insertMany(
+      subscribedUsers.map((subscriber) => ({
+        userId: subscriber._id,
+        type: "new-paper",
+        title: `New ${courseCode} paper available`,
+        message: `${title} was uploaded in ${department}.`,
+        paperId: paper._id,
+      }))
+    );
+  }
+
   return res.status(201).json({ message: "Paper uploaded successfully", paper });
 });
 
 const searchPapers = asyncHandler(async (req, res) => {
-  const { faculty, department, level, semester, courseCode, year, q, page = 1, limit = 12 } = req.query;
+  const {
+    faculty,
+    department,
+    level,
+    semester,
+    courseCode,
+    year,
+    minYear,
+    maxYear,
+    q,
+    sort = "newest",
+    page = 1,
+    limit = 12,
+  } = req.query;
 
-  const filters = { status: "approved" };
+  const filters = { status: "approved", isDeleted: false };
   if (faculty) filters.faculty = faculty;
   if (department) filters.department = department;
   if (level) filters.level = level;
   if (semester) filters.semester = semester;
   if (courseCode) filters.courseCode = { $regex: courseCode, $options: "i" };
   if (year) filters.year = Number(year);
+  if (minYear || maxYear) {
+    filters.year = {
+      ...(minYear ? { $gte: Number(minYear) } : {}),
+      ...(maxYear ? { $lte: Number(maxYear) } : {}),
+    };
+  }
   if (q) {
     filters.$or = [
       { title: { $regex: q, $options: "i" } },
@@ -106,13 +148,55 @@ const searchPapers = asyncHandler(async (req, res) => {
   const pageLimit = Math.min(Math.max(Number(limit), 1), 50);
   const skip = (pageNumber - 1) * pageLimit;
 
-  const [papers, total] = await Promise.all([
-    Paper.find(filters).populate("uploadedBy", "name role").sort({ createdAt: -1 }).skip(skip).limit(pageLimit),
-    Paper.countDocuments(filters),
-  ]);
+  const sortStage = {
+    newest: { createdAt: -1 },
+    oldest: { createdAt: 1 },
+    "highest-rated": { averageRating: -1, totalRatings: -1, createdAt: -1 },
+    "most-downloaded": { downloadCount: -1, createdAt: -1 },
+    relevance: q ? { textScore: { $meta: "textScore" } } : { createdAt: -1 },
+  }[sort] || { createdAt: -1 };
+
+  const aggregatePipeline = [
+    { $match: filters },
+    {
+      $lookup: {
+        from: "ratings",
+        localField: "_id",
+        foreignField: "paperId",
+        as: "ratings",
+      },
+    },
+    {
+      $addFields: {
+        totalRatings: { $size: "$ratings" },
+        averageRating: {
+          $cond: [{ $gt: [{ $size: "$ratings" }, 0] }, { $round: [{ $avg: "$ratings.rating" }, 1] }, 0],
+        },
+      },
+    },
+    { $project: { ratings: 0 } },
+    { $sort: sortStage },
+    { $skip: skip },
+    { $limit: pageLimit },
+  ];
+
+  const [papers, total] = await Promise.all([Paper.aggregate(aggregatePipeline), Paper.countDocuments(filters)]);
+
+  const paperIds = papers.map((paper) => paper._id);
+  const paperUploaders = await Paper.find({ _id: { $in: paperIds } }).populate("uploadedBy", "name role").select("_id uploadedBy");
+  const uploaderMap = new Map(paperUploaders.map((item) => [String(item._id), item.uploadedBy]));
+
+  const hydratedPapers = papers.map((paper) => ({
+    ...paper,
+    uploadedBy: uploaderMap.get(String(paper._id)) || null,
+  }));
+
+  if (req.user?._id) {
+    await Activity.create({ userId: req.user._id, action: "search", metadata: { filters: req.query } });
+  }
 
   return res.status(200).json({
-    papers,
+    papers: hydratedPapers,
     pagination: {
       total,
       page: pageNumber,
@@ -125,7 +209,7 @@ const searchPapers = asyncHandler(async (req, res) => {
 const getPaperById = asyncHandler(async (req, res) => {
   const paper = await Paper.findById(req.params.id).populate("uploadedBy", "name role");
 
-  if (!paper || paper.status !== "approved") {
+  if (!paper || paper.status !== "approved" || paper.isDeleted) {
     return res.status(404).json({ message: "Paper not found" });
   }
 
@@ -149,10 +233,41 @@ const getPaperById = asyncHandler(async (req, res) => {
   });
 });
 
+const trackView = asyncHandler(async (req, res) => {
+  const paper = await Paper.findById(req.params.id);
+
+  if (!paper || paper.status !== "approved" || paper.isDeleted) {
+    return res.status(404).json({ message: "Paper not found" });
+  }
+
+  if (req.user?._id) {
+    await Activity.create({ userId: req.user._id, paperId: paper._id, action: "view" });
+  }
+
+  return res.status(200).json({ message: "View tracked" });
+});
+
+const trackDownload = asyncHandler(async (req, res) => {
+  const paper = await Paper.findById(req.params.id);
+
+  if (!paper || paper.status !== "approved" || paper.isDeleted) {
+    return res.status(404).json({ message: "Paper not found" });
+  }
+
+  paper.downloadCount = (paper.downloadCount || 0) + 1;
+  await paper.save();
+
+  if (req.user?._id) {
+    await Activity.create({ userId: req.user._id, paperId: paper._id, action: "download" });
+  }
+
+  return res.status(200).json({ message: "Download tracked", fileUrl: paper.fileUrl });
+});
+
 const previewPaper = asyncHandler(async (req, res) => {
   const paper = await Paper.findById(req.params.id);
 
-  if (!paper || paper.status !== "approved") {
+  if (!paper || paper.status !== "approved" || paper.isDeleted) {
     return res.status(404).json({ message: "Paper not found" });
   }
 
@@ -176,5 +291,7 @@ module.exports = {
   uploadPaper,
   searchPapers,
   getPaperById,
+  trackView,
+  trackDownload,
   previewPaper,
 };
