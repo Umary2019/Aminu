@@ -11,11 +11,15 @@ import {
 } from "../data/gsuCatalog";
 
 const initialFilters = {
+  q: "",
   faculty: "",
   department: "",
   level: "",
   semester: "",
   courseCode: "",
+  minYear: "",
+  maxYear: "",
+  sort: "newest",
 };
 
 const SearchPage = () => {
@@ -38,8 +42,15 @@ const SearchPage = () => {
       );
       const { data } = await api.get("/papers", { params });
       setPapers(data.papers || []);
+      localStorage.setItem("pqf_last_search_result", JSON.stringify(data.papers || []));
     } catch (apiError) {
-      setError(apiError.response?.data?.message || "Could not fetch papers");
+      const cachedPapers = localStorage.getItem("pqf_last_search_result");
+      if (cachedPapers) {
+        setPapers(JSON.parse(cachedPapers));
+        setError("Network issue: showing cached search results.");
+      } else {
+        setError(apiError.response?.data?.message || "Could not fetch papers");
+      }
     } finally {
       setLoading(false);
     }

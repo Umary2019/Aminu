@@ -14,6 +14,8 @@ const PaperDetailsPage = () => {
   const [ratingSummary, setRatingSummary] = useState({ averageRating: 0, totalRatings: 0 });
   const [userRating, setUserRating] = useState(0);
   const [commentText, setCommentText] = useState("");
+  const [reportReason, setReportReason] = useState("wrong-paper");
+  const [reportDetails, setReportDetails] = useState("");
   const [error, setError] = useState("");
 
   const fetchDetails = async () => {
@@ -34,6 +36,11 @@ const PaperDetailsPage = () => {
   useEffect(() => {
     fetchDetails();
   }, [id]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    api.post(`/papers/${id}/view`).catch(() => {});
+  }, [id, isAuthenticated]);
 
   const submitRating = async (value) => {
     if (!isAuthenticated) {
@@ -73,6 +80,45 @@ const PaperDetailsPage = () => {
     }
   };
 
+  const saveFavorite = async () => {
+    if (!isAuthenticated) {
+      setError("Login to save papers to your study list.");
+      return;
+    }
+
+    try {
+      setError("");
+      await api.post("/student/favorites", { paperId: id });
+    } catch (apiError) {
+      setError(apiError.response?.data?.message || "Could not save to favorites");
+    }
+  };
+
+  const submitReport = async (event) => {
+    event.preventDefault();
+    if (!isAuthenticated) {
+      setError("Login to report papers.");
+      return;
+    }
+
+    try {
+      setError("");
+      await api.post("/student/reports", {
+        paperId: id,
+        reason: reportReason,
+        details: reportDetails,
+      });
+      setReportDetails("");
+    } catch (apiError) {
+      setError(apiError.response?.data?.message || "Could not submit report");
+    }
+  };
+
+  const trackDownload = () => {
+    if (!isAuthenticated) return;
+    api.post(`/papers/${id}/download`).catch(() => {});
+  };
+
   if (error) {
     return <main className="mx-auto max-w-4xl px-4 py-10 text-red-700">{error}</main>;
   }
@@ -104,6 +150,7 @@ const PaperDetailsPage = () => {
               href={paper.fileUrl}
               target="_blank"
               rel="noreferrer"
+              onClick={trackDownload}
               className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white"
             >
               Open PDF
@@ -111,10 +158,18 @@ const PaperDetailsPage = () => {
             <a
               href={paper.fileUrl}
               download
+              onClick={trackDownload}
               className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800"
             >
               Download PDF
             </a>
+            <button
+              type="button"
+              onClick={saveFavorite}
+              className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700"
+            >
+              Save to Study List
+            </button>
           </div>
 
           <div className="mt-6">
@@ -173,6 +228,34 @@ const PaperDetailsPage = () => {
                   ))
                 )}
               </div>
+            </section>
+          )}
+
+          {!isDemoPaper && (
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h2 className="font-display text-lg font-bold">Report Paper</h2>
+              <form onSubmit={submitReport} className="mt-3 space-y-2">
+                <select
+                  value={reportReason}
+                  onChange={(event) => setReportReason(event.target.value)}
+                  className="w-full rounded-lg border px-3 py-2"
+                >
+                  <option value="wrong-paper">Wrong Paper</option>
+                  <option value="bad-scan">Bad Scan</option>
+                  <option value="wrong-course">Wrong Course Code</option>
+                  <option value="duplicate">Duplicate</option>
+                  <option value="other">Other</option>
+                </select>
+                <textarea
+                  value={reportDetails}
+                  onChange={(event) => setReportDetails(event.target.value)}
+                  className="h-20 w-full rounded-lg border p-2"
+                  placeholder="Optional details..."
+                />
+                <button className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700">
+                  Submit Report
+                </button>
+              </form>
             </section>
           )}
         </aside>

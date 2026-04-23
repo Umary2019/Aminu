@@ -20,7 +20,7 @@ const createComment = asyncHandler(async (req, res) => {
   const { paperId, comment } = req.body;
 
   const paper = await Paper.findById(paperId);
-  if (!paper || paper.status !== "approved") {
+  if (!paper || paper.status !== "approved" || paper.isDeleted) {
     return res.status(404).json({ message: "Paper not found" });
   }
 
@@ -38,7 +38,7 @@ const createComment = asyncHandler(async (req, res) => {
 const getPaperComments = asyncHandler(async (req, res) => {
   const { paperId } = req.params;
 
-  const comments = await Comment.find({ paperId })
+  const comments = await Comment.find({ paperId, isHidden: false })
     .populate("userId", "name")
     .sort({ createdAt: -1 });
 

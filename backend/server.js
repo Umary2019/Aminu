@@ -16,6 +16,7 @@ const paperRoutes = require("./routes/paperRoutes");
 const commentRoutes = require("./routes/commentRoutes");
 const ratingRoutes = require("./routes/ratingRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const studentRoutes = require("./routes/studentRoutes");
 connectDB();
 
 const app = express();
@@ -48,6 +49,7 @@ app.use("/api/papers", paperRoutes);
 app.use("/api/comments", commentRoutes);
 app.use("/api/ratings", ratingRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/student", studentRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

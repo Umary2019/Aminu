@@ -18,7 +18,7 @@ const ratePaper = asyncHandler(async (req, res) => {
   const { paperId, rating } = req.body;
 
   const paper = await Paper.findById(paperId);
-  if (!paper || paper.status !== "approved") {
+  if (!paper || paper.status !== "approved" || paper.isDeleted) {
     return res.status(404).json({ message: "Paper not found" });
   }
 

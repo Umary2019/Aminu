@@ -7,16 +7,37 @@ import PaperCard from "../components/PaperCard";
 const StudentDashboardPage = () => {
   const { user } = useAuth();
   const [papers, setPapers] = useState([]);
+  const [favorites, setFavorites] = useState([]);
+  const [recommendations, setRecommendations] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     const loadLatest = async () => {
       try {
-        const { data } = await api.get("/papers", { params: { limit: 6 } });
-        setPapers(data.papers || []);
+        const [papersRes, favoritesRes, recRes, noteRes, activityRes] = await Promise.all([
+          api.get("/papers", { params: { limit: 6 } }),
+          api.get("/student/favorites"),
+          api.get("/student/recommendations"),
+          api.get("/student/notifications"),
+          api.get("/student/activity", { params: { limit: 20 } }),
+        ]);
+        setPapers(papersRes.data.papers || []);
+        setFavorites(favoritesRes.data.papers || []);
+        setRecommendations(recRes.data.recommendations || []);
+        setNotifications(noteRes.data.notifications || []);
+        setActivities(activityRes.data.activities || []);
+        localStorage.setItem("pqf_dashboard_cache", JSON.stringify(papersRes.data.papers || []));
       } catch (apiError) {
-        setError(apiError.response?.data?.message || "Unable to load your dashboard data");
+        const cached = localStorage.getItem("pqf_dashboard_cache");
+        if (cached) {
+          setPapers(JSON.parse(cached));
+          setError("Network issue: showing cached dashboard papers.");
+        } else {
+          setError(apiError.response?.data?.message || "Unable to load your dashboard data");
+        }
       } finally {
         setLoading(false);
       }
@@ -99,6 +120,84 @@ const StudentDashboardPage = () => {
           <p className="text-xs uppercase tracking-wider text-slate-500">Levels Active</p>
           <p className="mt-2 font-display text-3xl font-bold text-slate-900">{dashboardInsights.levelCount}</p>
           <p className="mt-1 text-sm text-slate-600">100 to 600 level coverage snapshots</p>
+        </article>
+      </section>
+
+      <section className="mt-8 grid gap-6 xl:grid-cols-[1fr_1fr]">
+        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-xl font-bold text-slate-900">Study List (Favorites)</h2>
+            <span className="text-xs font-bold text-amber-700">{favorites.length} saved</span>
+          </div>
+          <div className="mt-4 space-y-2">
+            {favorites.length === 0 ? (
+              <p className="text-sm text-slate-500">Save papers from search to build your revision list.</p>
+            ) : (
+              favorites.slice(0, 6).map((paper) => (
+                <Link key={paper._id} to={`/papers/${paper._id}`} className="block rounded-lg bg-slate-50 px-3 py-2">
+                  <p className="text-sm font-semibold text-slate-800">{paper.courseCode} - {paper.title}</p>
+                  <p className="text-xs text-slate-600">{paper.department} • {paper.year}</p>
+                </Link>
+              ))
+            )}
+          </div>
+        </article>
+
+        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-xl font-bold text-slate-900">Recommendations</h2>
+            <span className="text-xs font-bold text-teal-700">AI-like matching</span>
+          </div>
+          <div className="mt-4 space-y-2">
+            {recommendations.length === 0 ? (
+              <p className="text-sm text-slate-500">Use search and paper views to train recommendations.</p>
+            ) : (
+              recommendations.slice(0, 6).map((paper) => (
+                <Link key={paper._id} to={`/papers/${paper._id}`} className="block rounded-lg bg-slate-50 px-3 py-2">
+                  <p className="text-sm font-semibold text-slate-800">{paper.courseCode} - {paper.title}</p>
+                  <p className="text-xs text-slate-600">{paper.faculty} • {paper.level} Level</p>
+                </Link>
+              ))
+            )}
+          </div>
+        </article>
+      </section>
+
+      <section className="mt-6 grid gap-6 xl:grid-cols-[1fr_1fr]">
+        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="font-display text-xl font-bold text-slate-900">Notifications</h2>
+          <div className="mt-4 space-y-2">
+            {notifications.length === 0 ? (
+              <p className="text-sm text-slate-500">No notifications yet.</p>
+            ) : (
+              notifications.slice(0, 8).map((notification) => (
+                <Link
+                  key={notification._id}
+                  to={notification.paperId ? `/papers/${notification.paperId}` : "/search"}
+                  className="block rounded-lg bg-slate-50 px-3 py-2"
+                >
+                  <p className="text-sm font-semibold text-slate-800">{notification.title}</p>
+                  <p className="text-xs text-slate-600">{notification.message}</p>
+                </Link>
+              ))
+            )}
+          </div>
+        </article>
+
+        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="font-display text-xl font-bold text-slate-900">Recent Activity</h2>
+          <div className="mt-4 space-y-2">
+            {activities.length === 0 ? (
+              <p className="text-sm text-slate-500">No activity recorded yet.</p>
+            ) : (
+              activities.slice(0, 8).map((item) => (
+                <div key={item._id} className="rounded-lg bg-slate-50 px-3 py-2">
+                  <p className="text-sm font-semibold capitalize text-slate-800">{item.action}</p>
+                  <p className="text-xs text-slate-600">{item.paperId?.courseCode || "General"} - {item.paperId?.title || "Search Event"}</p>
+                </div>
+              ))
+            )}
+          </div>
         </article>
       </section>
 
