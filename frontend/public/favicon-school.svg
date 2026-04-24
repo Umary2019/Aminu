@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="School favicon">
+  <rect width="64" height="64" rx="14" fill="#12324d" />
+  <path d="M8 22 32 8l24 14-24 14L8 22Z" fill="#d9a93b" />
+  <path d="M10 26h44v28H10z" fill="#f3efe4" />
+  <path d="M16 30h32v4H16zM16 38h32v4H16zM16 46h22v4H16z" fill="#12324d" />
+  <path d="M14 54h36l2 2H12l2-2Z" fill="#d9a93b" />
+  <path d="M22 54V34h20v20" fill="none" stroke="#12324d" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M28 54V42h8v12" fill="#12324d" />
+</svg>
