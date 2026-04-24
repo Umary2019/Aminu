@@ -18,6 +18,8 @@ const PaperDetailsPage = () => {
   const [reportDetails, setReportDetails] = useState("");
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [previewSrc, setPreviewSrc] = useState("");
+  const [previewError, setPreviewError] = useState("");
 
   const fetchDetails = async () => {
     setLoadError("");
@@ -40,6 +42,40 @@ const PaperDetailsPage = () => {
   useEffect(() => {
     fetchDetails();
   }, [id]);
+
+  useEffect(() => {
+    let objectUrl = "";
+    let isMounted = true;
+
+    const loadPreview = async () => {
+      setPreviewError("");
+      setPreviewSrc("");
+
+      try {
+        const response = await api.get(`/papers/${id}/preview`, { responseType: "blob" });
+        objectUrl = URL.createObjectURL(response.data);
+
+        if (isMounted) {
+          setPreviewSrc(objectUrl);
+        }
+      } catch (_previewApiError) {
+        if (isMounted) {
+          setPreviewError("Preview unavailable. Use Open PDF to view the file.");
+        }
+      }
+    };
+
+    if (isAuthenticated) {
+      loadPreview();
+    }
+
+    return () => {
+      isMounted = false;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [id, isAuthenticated]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -132,7 +168,6 @@ const PaperDetailsPage = () => {
   }
 
   const isDemoPaper = paper.isDemo === true;
-  const previewUrl = `${import.meta.env.VITE_API_URL || "http://localhost:5000/api"}/papers/${id}/preview`;
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-10 md:px-6">
@@ -179,14 +214,18 @@ const PaperDetailsPage = () => {
 
           <div className="mt-6">
             <h2 className="font-display text-lg font-bold">Preview</h2>
-            <iframe
-              src={previewUrl}
-              title={paper.title}
-              className="mt-3 h-[500px] w-full rounded-lg border"
-            />
-            <p className="mt-2 text-xs text-slate-500">
-              If preview does not load, use Open PDF to view in a new tab.
-            </p>
+            {previewSrc ? (
+              <iframe
+                src={previewSrc}
+                title={paper.title}
+                className="mt-3 h-[500px] w-full rounded-lg border"
+              />
+            ) : (
+              <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                {previewError || "Loading preview..."}
+              </div>
+            )}
+            <p className="mt-2 text-xs text-slate-500">If preview does not load, use Open PDF to view in a new tab.</p>
           </div>
         </section>
 
