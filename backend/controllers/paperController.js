@@ -38,6 +38,12 @@ const searchPapersValidation = [
 const paperByIdValidation = [param("id").isMongoId().withMessage("Valid paper id is required")];
 
 const transientCloudinaryErrors = new Set(["TimeoutError", "ENOTFOUND", "EAI_AGAIN", "ETIMEDOUT"]);
+const isServerlessRuntime =
+  process.env.VERCEL === "1" ||
+  Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME) ||
+  process.env.NODE_ENV === "production";
+
+const canUseLocalFallback = !isServerlessRuntime;
 
 const sanitizeFilename = (originalname) => {
   const base = path.basename(originalname || "paper", path.extname(originalname || ""));
@@ -117,9 +123,23 @@ const uploadPaper = asyncHandler(async (req, res) => {
         });
       }
 
+      if (!canUseLocalFallback) {
+        return res.status(503).json({
+          message:
+            "Cloudinary is temporarily unavailable and local file fallback is disabled in serverless runtime. Please try again shortly.",
+        });
+      }
+
       uploadResult = await saveFileLocally(req, req.file.buffer, req.file.originalname);
     }
   } else {
+    if (!canUseLocalFallback) {
+      return res.status(503).json({
+        message:
+          "File upload storage is not configured for production. Set Cloudinary credentials in deployment environment variables.",
+      });
+    }
+
     uploadResult = await saveFileLocally(req, req.file.buffer, req.file.originalname);
   }
 
